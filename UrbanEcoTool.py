@@ -2,14 +2,15 @@ import streamlit as st
 import osmnx as ox
 import geopandas as gpd
 import folium
+import time
 from streamlit_folium import folium_static
 
-# Set Nominatim endpoint and user-agent to avoid connection issues
+# Set a different Nominatim server to reduce blocking issues
 ox.settings.nominatim_endpoint = "https://nominatim.openstreetmap.de"
-
 
 def fetch_urban_data(city_name):
     """Fetch urban boundary and green areas for a city."""
+    time.sleep(1)  # Add a delay to prevent request blocking
     boundary = ox.geocode_to_gdf(city_name)
     green_tags = {
         "leisure": ["park", "garden"],
