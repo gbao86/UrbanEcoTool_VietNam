@@ -2,7 +2,7 @@
 # coding: utf-8
 
 # # Urban Green Space Analysis and Optimization Tool
-A Python-based software solution that analyzes urban areas to identify underutilized spaces and optimize them for planting trees, creating parks, or improving biodiversity.
+
 # In[2]:
 
 
@@ -227,4 +227,9 @@ city_name = st.text_input("Enter a city name:", "Mysuru, India")
 if st.button("Show Map"):
     display_map(city_name)
 
-Coded by Rahul!
+
+# In[17]:
+
+
+get_ipython().system('jupyter nbconvert --to script UrbanEcoTool.ipynb')
+
