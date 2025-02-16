@@ -3,3 +3,4 @@ osmnx
 geopandas
 folium
 streamlit_folium
+geopy
