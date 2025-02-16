@@ -6,7 +6,7 @@ from streamlit_folium import folium_static
 
 # Set Nominatim endpoint and user-agent to avoid connection issues
 ox.settings.nominatim_endpoint = "https://nominatim.openstreetmap.de"
-ox.settings.requests_kwargs = {"timeout": 30}
+
 
 def fetch_urban_data(city_name):
     """Fetch urban boundary and green areas for a city."""
