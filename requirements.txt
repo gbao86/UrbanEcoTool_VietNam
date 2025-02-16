@@ -1,0 +1,5 @@
+streamlit
+osmnx
+geopandas
+folium
+streamlit_folium
