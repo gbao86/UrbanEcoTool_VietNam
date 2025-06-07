@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2>Lịch sử phân tích</h2>
+    
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Ngày phân tích</th>
+                    <th>Địa điểm</th>
+                    <th>Tọa độ</th>
+                    <th>Chế độ</th>
+                    <th>Bán kính</th>
+                    <th>Số điểm đề xuất</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for analysis in analyses %}
+                <tr>
+                    <td>{{ analysis.analysis_date.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td>{{ analysis.location_name }}</td>
+                    <td>{{ analysis.latitude }}, {{ analysis.longitude }}</td>
+                    <td>{{ analysis.analysis_type }}</td>
+                    <td>{{ analysis.analysis_parameters|from_json|get('radius') }}m</td>
+                    <td>{{ analysis.tree_planting_suggestions|length }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="viewDetails({{ analysis.id }})">
+                            Xem chi tiết
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal for viewing analysis details -->
+    <div class="modal fade" id="analysisDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Chi tiết phân tích</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="analysisMap" style="height: 400px;"></div>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-striped" id="suggestionsTable">
+                            <thead>
+                                <tr>
+                                    <th>Vị trí</th>
+                                    <th>Cây đề xuất</th>
+                                    <th>Lý do</th>
+                                    <th>Điểm ưu tiên</th>
+                                    <th>Diện tích (m²)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let detailMap = null;
+    let detailMarkers = [];
+
+    function viewDetails(analysisId) {
+        fetch(`/analysis/${analysisId}`)
+            .then(response => response.json())
+            .then(data => {
+                // Initialize map if not already done
+                if (!detailMap) {
+                    detailMap = L.map('analysisMap').setView([data.latitude, data.longitude], 15);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(detailMap);
+                } else {
+                    detailMap.setView([data.latitude, data.longitude], 15);
+                }
+
+                // Clear existing markers
+                detailMarkers.forEach(marker => detailMap.removeLayer(marker));
+                detailMarkers = [];
+
+                // Add analysis circle
+                L.circle([data.latitude, data.longitude], {
+                    radius: data.radius,
+                    color: 'red',
+                    fillColor: '#f03',
+                    fillOpacity: 0.2
+                }).addTo(detailMap);
+
+                // Add suggestion markers
+                data.suggestions.forEach(suggestion => {
+                    const marker = L.marker([suggestion.latitude, suggestion.longitude])
+                        .bindPopup(`
+                            <strong>${suggestion.tree_type}</strong><br>
+                            ${suggestion.reason}<br>
+                            Điểm ưu tiên: ${suggestion.priority_score}<br>
+                            Diện tích: ${suggestion.space_sqm}m²
+                        `)
+                        .addTo(detailMap);
+                    detailMarkers.push(marker);
+                });
+
+                // Update table
+                const tbody = document.getElementById('suggestionsTable').getElementsByTagName('tbody')[0];
+                tbody.innerHTML = '';
+                data.suggestions.forEach(suggestion => {
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = `${suggestion.latitude.toFixed(6)}, ${suggestion.longitude.toFixed(6)}`;
+                    row.insertCell(1).textContent = suggestion.tree_type;
+                    row.insertCell(2).textContent = suggestion.reason;
+                    row.insertCell(3).textContent = suggestion.priority_score;
+                    row.insertCell(4).textContent = suggestion.space_sqm;
+                });
+
+                // Show modal
+                new bootstrap.Modal(document.getElementById('analysisDetailsModal')).show();
+            });
+    }
+</script>
+{% endblock %} 

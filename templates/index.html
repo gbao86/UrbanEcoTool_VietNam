@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Control Panel -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Tìm kiếm địa điểm</h5>
+                    
+                    <!-- Location Search -->
+                    <div class="mb-3">
+                        <label class="form-label">Tên địa điểm</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="locationSearch" placeholder="Nhập tên địa điểm...">
+                            <button class="btn btn-primary" type="button" id="searchButton">Tìm kiếm</button>
+                        </div>
+                    </div>
+
+                    <!-- Coordinates Input -->
+                    <div class="mb-3">
+                        <label class="form-label">Tọa độ</label>
+                        <div class="row">
+                            <div class="col">
+                                <input type="number" class="form-control" id="latitude" placeholder="Vĩ độ">
+                            </div>
+                            <div class="col">
+                                <input type="number" class="form-control" id="longitude" placeholder="Kinh độ">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analysis Mode -->
+                    <div class="mb-3">
+                        <label class="form-label">Chế độ phân tích</label>
+                        <select class="form-select" id="analysisMode">
+                            <option value="standard">Tiêu chuẩn</option>
+                            <option value="dense">Mật độ dày đặc</option>
+                            <option value="suburban">Ngoại ô</option>
+                        </select>
+                    </div>
+
+                    <!-- Radius Selection -->
+                    <div class="mb-3">
+                        <label class="form-label">Bán kính phân tích: <span id="radiusValue">1000</span>m</label>
+                        <input type="range" class="form-range" id="radiusRange" min="100" max="2000" step="100" value="1000">
+                    </div>
+
+                    <!-- Analysis Controls -->
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success" id="startAnalysis">Phân tích</button>
+                        <button class="btn btn-danger" id="stopAnalysis" disabled>Dừng</button>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="progress mt-3 d-none" id="analysisProgress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Table -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h5 class="card-title">Kết quả phân tích</h5>
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="resultsTable">
+                            <thead>
+                                <tr>
+                                    <th>Vị trí</th>
+                                    <th>Cây đề xuất</th>
+                                    <th>Lý do</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map -->
+        <div class="col-md-8">
+            <div id="map" style="height: 800px;"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Initialize map
+    const map = L.map('map').setView([10.762622, 106.660172], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    let analysisCircle = null;
+    let markers = [];
+
+    // Event Listeners
+    document.getElementById('searchButton').addEventListener('click', searchLocation);
+    document.getElementById('startAnalysis').addEventListener('click', startAnalysis);
+    document.getElementById('stopAnalysis').addEventListener('click', stopAnalysis);
+    document.getElementById('radiusRange').addEventListener('input', updateRadius);
+
+    // Functions
+    function searchLocation() {
+        const location = document.getElementById('locationSearch').value;
+        if (!location) return;
+
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.length > 0) {
+                    const { lat, lon } = data[0];
+                    document.getElementById('latitude').value = lat;
+                    document.getElementById('longitude').value = lon;
+                    map.setView([lat, lon], 15);
+                    updateAnalysisCircle(lat, lon);
+                }
+            });
+    }
+
+    function updateRadius(e) {
+        const radius = e.target.value;
+        document.getElementById('radiusValue').textContent = radius;
+        const lat = document.getElementById('latitude').value;
+        const lon = document.getElementById('longitude').value;
+        if (lat && lon) {
+            updateAnalysisCircle(lat, lon, radius);
+        }
+    }
+
+    function updateAnalysisCircle(lat, lon, radius = 1000) {
+        if (analysisCircle) {
+            map.removeLayer(analysisCircle);
+        }
+        analysisCircle = L.circle([lat, lon], {
+            radius: radius,
+            color: 'red',
+            fillColor: '#f03',
+            fillOpacity: 0.2
+        }).addTo(map);
+    }
+
+    function startAnalysis() {
+        const lat = document.getElementById('latitude').value;
+        const lon = document.getElementById('longitude').value;
+        const radius = document.getElementById('radiusRange').value;
+        const mode = document.getElementById('analysisMode').value;
+
+        if (!lat || !lon) {
+            alert('Vui lòng nhập địa điểm hoặc tọa độ');
+            return;
+        }
+
+        document.getElementById('startAnalysis').disabled = true;
+        document.getElementById('stopAnalysis').disabled = false;
+        document.getElementById('analysisProgress').classList.remove('d-none');
+
+        fetch('/analyze', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                location_name: document.getElementById('locationSearch').value,
+                latitude: lat,
+                longitude: lon,
+                radius: radius,
+                mode: mode
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                displayResults(data.suggestions);
+            }
+        })
+        .finally(() => {
+            document.getElementById('startAnalysis').disabled = false;
+            document.getElementById('stopAnalysis').disabled = true;
+            document.getElementById('analysisProgress').classList.add('d-none');
+        });
+    }
+
+    function stopAnalysis() {
+        // Implement stop analysis logic
+        document.getElementById('startAnalysis').disabled = false;
+        document.getElementById('stopAnalysis').disabled = true;
+        document.getElementById('analysisProgress').classList.add('d-none');
+    }
+
+    function displayResults(suggestions) {
+        // Clear existing markers
+        markers.forEach(marker => map.removeLayer(marker));
+        markers = [];
+
+        // Clear table
+        const tbody = document.getElementById('resultsTable').getElementsByTagName('tbody')[0];
+        tbody.innerHTML = '';
+
+        // Add new markers and table rows
+        suggestions.forEach(suggestion => {
+            const marker = L.marker([suggestion.latitude, suggestion.longitude])
+                .bindPopup(`
+                    <strong>${suggestion.tree_type}</strong><br>
+                    ${suggestion.reason}<br>
+                    Khoảng cách tối thiểu: ${suggestion.min_distance}m
+                `)
+                .addTo(map);
+            markers.push(marker);
+
+            const row = tbody.insertRow();
+            row.insertCell(0).textContent = `${suggestion.latitude.toFixed(6)}, ${suggestion.longitude.toFixed(6)}`;
+            row.insertCell(1).textContent = suggestion.tree_type;
+            row.insertCell(2).textContent = suggestion.reason;
+        });
+    }
+</script>
+{% endblock %} 
